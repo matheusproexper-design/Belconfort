@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Teste de Conhecimento Belconfort</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #1e293b;
+        touch-action: none;
+      }
+      /* Custom Animations for the 'run' effect */
+      @keyframes moveFloor {
+        from { background-position: 0 0; }
+        to { background-position: 0 100px; }
+      }
+      .perspective-container {
+        perspective: 1200px;
+        perspective-origin: 50% 50%;
+      }
+      .game-lane {
+        transform-style: preserve-3d;
+        transform: rotateX(45deg);
+        transform-origin: 50% 100%;
+      }
+
+      /* Road Markings Animation */
+      @keyframes road-scroll {
+        from { background-position: 0 -100px; }
+        to { background-position: 0 0; }
+      }
+      .animate-road-scroll {
+        animation: road-scroll 0.2s linear infinite;
+      }
+
+      /* Character Animations */
+      @keyframes truck-rumble {
+        0% { transform: translateY(0) rotate(0deg); }
+        25% { transform: translateY(-1px) rotate(0.5deg); }
+        50% { transform: translateY(1px) rotate(0deg); }
+        75% { transform: translateY(-1px) rotate(-0.5deg); }
+        100% { transform: translateY(0) rotate(0deg); }
+      }
+      .animate-truck-run {
+        animation: truck-rumble 0.2s infinite linear;
+      }
+
+      /* Realistic Exhaust Fumes */
+      @keyframes fume-left {
+        0% { 
+          opacity: 0.9; 
+          transform: translate(0, 0) scale(0.4); 
+          border-radius: 50%; 
+          background-color: #64748b; /* Slate-500 (Dark Exhaust) */
+          box-shadow: 0 0 2px rgba(0,0,0,0.3);
+        }
+        20% {
+           background-color: #94a3b8; /* Slate-400 */
+        }
+        40% {
+          opacity: 0.6;
+          transform: translate(-8px, 40px) scale(1.5);
+          background-color: #cbd5e1; /* Slate-300 */
+        }
+        100% { 
+          opacity: 0; 
+          transform: translate(-20px, 140px) scale(3.5); 
+          filter: blur(8px);
+          background-color: #f8fafc; /* Slate-50 */
+        }
+      }
+      
+      @keyframes fume-right {
+        0% { 
+          opacity: 0.9; 
+          transform: translate(0, 0) scale(0.4); 
+          border-radius: 50%; 
+          background-color: #64748b;
+          box-shadow: 0 0 2px rgba(0,0,0,0.3);
+        }
+        20% {
+           background-color: #94a3b8;
+        }
+        40% {
+          opacity: 0.6;
+          transform: translate(8px, 40px) scale(1.5);
+          background-color: #cbd5e1;
+        }
+        100% { 
+          opacity: 0; 
+          transform: translate(20px, 140px) scale(3.5); 
+          filter: blur(8px);
+          background-color: #f8fafc;
+        }
+      }
+      
+      .animate-fume-left { animation: fume-left 1.2s ease-out infinite; }
+      .animate-fume-right { animation: fume-right 1.2s ease-out infinite; }
+      
+      .delay-100 { animation-delay: 0.1s; }
+
+      /* Smooth HUD Transition */
+      @keyframes slide-in-soft {
+        0% { 
+          opacity: 0; 
+          transform: translateY(-20px) scale(0.95); 
+        }
+        100% { 
+          opacity: 1; 
+          transform: translateY(0) scale(1); 
+        }
+      }
+      .animate-slide-in-soft {
+        animation: slide-in-soft 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      /* Success Animations */
+      @keyframes jump-success {
+        0% { transform: translateY(0) scale(1); }
+        30% { transform: translateY(-25px) scale(1.1); }
+        60% { transform: translateY(5px) scale(0.95); }
+        100% { transform: translateY(0) scale(1); }
+      }
+      .animate-jump-success {
+        animation: jump-success 0.6s ease-out;
+      }
+
+      @keyframes float-text {
+        0% { opacity: 0; transform: translateY(20px) scale(0.5); }
+        20% { opacity: 1; transform: translateY(-10px) scale(1.2); }
+        100% { opacity: 0; transform: translateY(-100px) scale(1); }
+      }
+      .animate-float-text {
+        animation: float-text 0.8s ease-out forwards;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "vite": "https://aistudiocdn.com/vite@^7.2.6",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
