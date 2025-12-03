@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { QUESTIONS } from '../constants';
 import { Question, TruckConfig } from '../types';
@@ -9,7 +8,8 @@ interface GameLoopProps {
   onGameOver: (score: number, passed: boolean, correctAnswer?: string) => void;
   onScoreUpdate: (score: number) => void;
   truckConfig: TruckConfig;
-  onPlaySound: (type: 'success' | 'fail') => void;
+  onPlaySound: (type: 'success' | 'fail' | 'horn') => void;
+  onProgressUpdate?: (current: number, total: number) => void;
 }
 
 interface Obstacle {
@@ -80,12 +80,13 @@ const shuffleArray = <T,>(array: T[]): T[] => {
     return newArr;
 };
 
-const GameLoop: React.FC<GameLoopProps> = ({ onGameOver, onScoreUpdate, truckConfig, onPlaySound }) => {
+const GameLoop: React.FC<GameLoopProps> = ({ onGameOver, onScoreUpdate, truckConfig, onPlaySound, onProgressUpdate }) => {
   const [playerLane, setPlayerLane] = useState<0 | 1 | 2>(1); // 0=Left, 1=Center, 2=Right
   const [currentObstacle, setCurrentObstacle] = useState<Obstacle | null>(null);
   const [scenery, setScenery] = useState<SceneryObject[]>([]);
   const [score, setScore] = useState(0);
   const [animatingHit, setAnimatingHit] = useState<'success' | 'fail' | null>(null);
+  const [failPhrase, setFailPhrase] = useState<string | undefined>(undefined);
 
   // Refs for loop state to avoid closure staleness
   const requestRef = useRef<number>(0);
@@ -98,6 +99,9 @@ const GameLoop: React.FC<GameLoopProps> = ({ onGameOver, onScoreUpdate, truckCon
   const questionIndexRef = useRef(0);
   const frameCountRef = useRef(0);
   
+  // Touch/Swipe Refs
+  const touchStartRef = useRef<{ x: number, y: number } | null>(null);
+  
   // Store the shuffled questions for this session
   const shuffledQuestionsRef = useRef<Question[]>([]);
 
@@ -105,36 +109,112 @@ const GameLoop: React.FC<GameLoopProps> = ({ onGameOver, onScoreUpdate, truckCon
   useEffect(() => {
     // Shuffle questions when component mounts (start of game)
     shuffledQuestionsRef.current = shuffleArray(QUESTIONS);
-  }, []);
+    if (onProgressUpdate) {
+        onProgressUpdate(0, shuffledQuestionsRef.current.length);
+    }
+  }, [onProgressUpdate]);
+
+  // Movement Helpers
+  const moveLeft = () => {
+    setPlayerLane((prev) => {
+      const next = Math.max(0, prev - 1) as 0 | 1 | 2;
+      playerLaneRef.current = next;
+      return next;
+    });
+  };
+
+  const moveRight = () => {
+    setPlayerLane((prev) => {
+      const next = Math.min(2, prev + 1) as 0 | 1 | 2;
+      playerLaneRef.current = next;
+      return next;
+    });
+  };
+
+  const setLane = (lane: 0 | 1 | 2) => {
+      setPlayerLane(lane);
+      playerLaneRef.current = lane;
+  };
 
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isGameOverRef.current) return;
-      
-      if (e.key === 'ArrowLeft') {
-        setPlayerLane((prev) => {
-          const next = Math.max(0, prev - 1) as 0 | 1 | 2;
-          playerLaneRef.current = next;
-          return next;
-        });
-      } else if (e.key === 'ArrowRight') {
-        setPlayerLane((prev) => {
-          const next = Math.min(2, prev + 1) as 0 | 1 | 2;
-          playerLaneRef.current = next;
-          return next;
-        });
-      }
+      if (e.key === 'ArrowLeft') moveLeft();
+      else if (e.key === 'ArrowRight') moveRight();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Touch controls
-  const handleTouch = (lane: 0 | 1 | 2) => {
+  // Gyroscope Controls (DeviceOrientation)
+  useEffect(() => {
+    const handleOrientation = (event: DeviceOrientationEvent) => {
+        if (isGameOverRef.current) return;
+        
+        // Gamma is the left-to-right tilt in degrees, usually -90 to 90
+        const tilt = event.gamma; 
+        
+        if (tilt === null) return;
+
+        // Thresholds for tilting
+        // < -10 deg: Left
+        // > 10 deg: Right
+        // -5 to 5 deg: Center (hysteresis to prevent flickering)
+        
+        if (tilt < -10) {
+            if (playerLaneRef.current !== 0) setLane(0);
+        } else if (tilt > 10) {
+            if (playerLaneRef.current !== 2) setLane(2);
+        } else if (tilt > -5 && tilt < 5) {
+            // Only return to center if the player isn't holding a touch override? 
+            // For simplicity, tilt dominates if active.
+            if (playerLaneRef.current !== 1) setLane(1);
+        }
+    };
+
+    window.addEventListener('deviceorientation', handleOrientation);
+    return () => window.removeEventListener('deviceorientation', handleOrientation);
+  }, []);
+
+  // Swipe / Touch Logic
+  const handleTouchStart = (e: React.TouchEvent) => {
+      touchStartRef.current = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY
+      };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+      if (!touchStartRef.current || isGameOverRef.current) return;
+
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+      
+      const diffX = touchStartRef.current.x - endX;
+      const diffY = touchStartRef.current.y - endY;
+
+      // Check if it's a swipe (horizontal difference > 30px and greater than vertical difference)
+      if (Math.abs(diffX) > 30 && Math.abs(diffX) > Math.abs(diffY)) {
+          if (diffX > 0) {
+              // Swiped Left (Start > End)
+              moveLeft();
+          } else {
+              // Swiped Right (Start < End)
+              moveRight();
+          }
+      }
+      
+      touchStartRef.current = null;
+  };
+
+  // Legacy Zone Tap Logic (Keeping for backward compat/accessibility)
+  const handleZoneTap = (lane: 0 | 1 | 2) => {
     if (isGameOverRef.current) return;
-    setPlayerLane(lane);
-    playerLaneRef.current = lane;
+    // Only trigger if it wasn't a significant swipe
+    if (!touchStartRef.current) {
+        setLane(lane);
+    }
   }
 
   // Spawning logic
@@ -145,8 +225,16 @@ const GameLoop: React.FC<GameLoopProps> = ({ onGameOver, onScoreUpdate, truckCon
       return;
     }
 
+    // Play Horn Sound
+    onPlaySound('horn');
+
     const question = shuffledQuestionsRef.current[questionIndexRef.current];
     questionIndexRef.current += 1;
+    
+    // Update progress
+    if (onProgressUpdate) {
+        onProgressUpdate(questionIndexRef.current, shuffledQuestionsRef.current.length);
+    }
 
     const newObstacle: Obstacle = {
       id: Date.now(),
@@ -194,6 +282,8 @@ const GameLoop: React.FC<GameLoopProps> = ({ onGameOver, onScoreUpdate, truckCon
 
   // Main Loop
   const animate = useCallback(() => {
+    // If game over is triggered, we still want to render the loop to show the fail animation, 
+    // but we stop updating the obstacle/scenery positions.
     if (isGameOverRef.current) return;
     
     frameCountRef.current += 1;
@@ -234,14 +324,18 @@ const GameLoop: React.FC<GameLoopProps> = ({ onGameOver, onScoreUpdate, truckCon
              } else {
                  setAnimatingHit('fail');
                  onPlaySound('fail');
-                 isGameOverRef.current = true;
+                 isGameOverRef.current = true; // Stops the movement loop next frame
                  
                  // Get the correct answer to display
                  const correctAnswerText = obstacleRef.current.question.answers[obstacleRef.current.question.correctIndex];
                  
+                 // Set specific rage phrase
+                 setFailPhrase("Assim não dá, vou ter que aumentar o frete!");
+
+                 // Wait 5 seconds (5000ms) for the animation to play before showing Game Over screen
                  setTimeout(() => {
                      onGameOver(scoreRef.current, false, correctAnswerText);
-                 }, 500);
+                 }, 5000);
              }
         }
       }
@@ -284,8 +378,14 @@ const GameLoop: React.FC<GameLoopProps> = ({ onGameOver, onScoreUpdate, truckCon
     }
   };
 
+  const isGamePaused = animatingHit === 'fail';
+
   return (
-    <div className="relative w-full h-full overflow-hidden bg-green-600 perspective-container select-none">
+    <div 
+        className={`relative w-full h-full overflow-hidden bg-green-600 perspective-container select-none ${animatingHit === 'fail' ? 'animate-shake-combo' : animatingHit === 'success' ? 'animate-shake-soft' : ''}`}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+    >
       
       {/* Grass Environment Detail */}
       <div 
@@ -352,14 +452,14 @@ const GameLoop: React.FC<GameLoopProps> = ({ onGameOver, onScoreUpdate, truckCon
 
             {/* Animated Lane Dividers */}
             <div 
-                className="absolute left-1/3 top-0 bottom-0 w-4 -ml-2 h-full animate-road-scroll"
+                className={`absolute left-1/3 top-0 bottom-0 w-4 -ml-2 h-full animate-road-scroll ${isGamePaused ? 'paused' : ''}`}
                 style={{
                     backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.8) 50%, transparent 50%)',
                     backgroundSize: '16px 100px',
                 }}
             ></div>
             <div 
-                className="absolute left-2/3 top-0 bottom-0 w-4 -ml-2 h-full animate-road-scroll"
+                className={`absolute left-2/3 top-0 bottom-0 w-4 -ml-2 h-full animate-road-scroll ${isGamePaused ? 'paused' : ''}`}
                 style={{
                     backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.8) 50%, transparent 50%)',
                     backgroundSize: '16px 100px',
@@ -388,10 +488,10 @@ const GameLoop: React.FC<GameLoopProps> = ({ onGameOver, onScoreUpdate, truckCon
         ))}
 
 
-        {/* Touch Zones (Interactive) */}
-        <div onClick={() => handleTouch(0)} className="absolute left-0 top-0 bottom-0 w-1/3 z-20 active:bg-white/5 transition-colors"></div>
-        <div onClick={() => handleTouch(1)} className="absolute left-1/3 top-0 bottom-0 w-1/3 z-20 active:bg-white/5 transition-colors"></div>
-        <div onClick={() => handleTouch(2)} className="absolute left-2/3 top-0 bottom-0 w-1/3 z-20 active:bg-white/5 transition-colors"></div>
+        {/* Touch Zones (Interactive) - Acting as fallback tap zones if not swiping */}
+        <div onClick={() => handleZoneTap(0)} className="absolute left-0 top-0 bottom-0 w-1/3 z-20 active:bg-white/5 transition-colors"></div>
+        <div onClick={() => handleZoneTap(1)} className="absolute left-1/3 top-0 bottom-0 w-1/3 z-20 active:bg-white/5 transition-colors"></div>
+        <div onClick={() => handleZoneTap(2)} className="absolute left-2/3 top-0 bottom-0 w-1/3 z-20 active:bg-white/5 transition-colors"></div>
 
         {/* The Gates (Answers) */}
         {currentObstacle && (
@@ -432,8 +532,9 @@ const GameLoop: React.FC<GameLoopProps> = ({ onGameOver, onScoreUpdate, truckCon
         >
           <TruckCharacter 
             config={truckConfig} 
-            isRunning={true} 
+            isRunning={!isGamePaused} 
             scoreEffect={animatingHit} 
+            failPhrase={failPhrase}
           />
         </div>
 
@@ -443,4 +544,3 @@ const GameLoop: React.FC<GameLoopProps> = ({ onGameOver, onScoreUpdate, truckCon
 };
 
 export default GameLoop;
-    

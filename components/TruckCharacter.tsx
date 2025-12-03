@@ -1,11 +1,11 @@
-
-import React from 'react';
+import React, { useMemo } from 'react';
 import { TruckConfig } from '../types';
 
 interface TruckProps {
   config: TruckConfig;
   isRunning?: boolean;
   scoreEffect?: 'success' | 'fail' | null;
+  failPhrase?: string;
 }
 
 // Updated colors to match the soft Pixar-like aesthetic from the image
@@ -86,6 +86,94 @@ const Wheel = ({ type, side }: { type: TruckConfig['wheelType'], side: 'left' | 
   );
 };
 
+const Driver = ({ 
+    mode, 
+    customPhrase 
+}: { 
+    mode: 'normal' | 'celebrate' | 'rage',
+    customPhrase?: string 
+}) => {
+    // Frases aleatórias para o balão quando não há frase customizada
+    const phrases = ["Bora!", "Acelera!", "Cuidado!", "Ave Maria!", "Eita!", "Meu Deus!"];
+    const randomPhrase = useMemo(() => phrases[Math.floor(Math.random() * phrases.length)], []);
+    
+    // Choose animation based on mode
+    let animationClass = 'animate-driver-peek';
+    if (mode === 'celebrate') animationClass = 'animate-driver-celebrate';
+    if (mode === 'rage') animationClass = 'animate-driver-rage';
+
+    // Se estiver em rage (fail), mostramos as pernas
+    const showLegs = mode === 'rage';
+
+    return (
+        <div className={`absolute -left-3 bottom-0 w-8 h-10 z-[25] ${animationClass} origin-bottom-right`}>
+             
+             {/* Speech Bubble - UPDATED FOR BETTER READABILITY */}
+             <div className={`
+                absolute -top-24 -left-24 
+                bg-white border-2 border-black 
+                rounded-2xl rounded-br-none 
+                p-2 
+                w-32 
+                shadow-[3px_3px_0px_rgba(0,0,0,0.2)] 
+                z-50 flex flex-col items-center justify-center text-center
+                ${customPhrase ? 'bubble-visible' : 'animate-pop-bubble'}
+             `}>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 leading-none">Seu Pedro</span>
+                <span className="text-[11px] font-black text-red-600 leading-tight block w-full break-words">
+                    {customPhrase || randomPhrase}
+                </span>
+                
+                {/* Tail */}
+                <div className="absolute -bottom-2 -right-[1px] w-4 h-4 bg-white border-b-2 border-r-2 border-black transform rotate-45"></div>
+             </div>
+
+             {/* Head */}
+             <div className="w-7 h-8 bg-[#8D6E63] rounded-lg relative shadow-md border border-black/10">
+                 {/* Hair (White/Grey) */}
+                 <div className="absolute -top-1 left-0 w-full h-3 bg-gray-200 rounded-t-lg"></div>
+                 <div className="absolute top-1 -left-0.5 w-1 h-3 bg-gray-200 rounded-l-md"></div>
+                 
+                 {/* Sweat drops (Agoniado effect) */}
+                 <div className="absolute -top-2 -right-1 w-1 h-1.5 bg-blue-300 rounded-full animate-sweat" style={{ animationDelay: '0s' }}></div>
+                 <div className="absolute -top-1 right-0 w-1 h-1.5 bg-blue-300 rounded-full animate-sweat" style={{ animationDelay: '0.3s' }}></div>
+
+                 {/* Glasses - Retangulares (requested previously) */}
+                 <div className="absolute top-3 left-0.5 flex gap-0.5">
+                     <div className="w-2.5 h-2 bg-blue-100/60 border-2 border-slate-800 rounded-sm"></div>
+                     <div className="w-0.5 h-0.5 bg-slate-800 mt-1"></div>
+                     <div className="w-2.5 h-2 bg-blue-100/60 border-2 border-slate-800 rounded-sm"></div>
+                 </div>
+
+                 {/* Nose */}
+                 <div className="absolute top-5 left-2.5 w-1.5 h-2 bg-[#795548] rounded-full opacity-50"></div>
+
+                 {/* Mouth */}
+                 <div className={`absolute bottom-1 left-2 w-3 h-1 bg-black/60 rounded-full ${mode === 'rage' ? 'h-2 rounded-md' : ''}`}></div>
+             </div>
+
+             {/* Body (Shirt) - Brown (requested previously) */}
+             <div className="absolute top-8 left-[-2px] w-8 h-6 bg-[#5D4037] rounded-b-md flex justify-center border-x border-black/10">
+                 {/* Buttons */}
+                 <div className="w-1 h-full border-r border-dashed border-white/20"></div>
+             </div>
+             
+             {/* Arm resting (Visual trick to connect to window, hide in rage) */}
+             {mode !== 'rage' && (
+                 <div className="absolute bottom-[-5px] right-0 w-6 h-4 bg-white border border-gray-300 rounded-l-md transform -rotate-12"></div>
+             )}
+
+             {/* Legs (Only visible when jumping out) */}
+             {showLegs && (
+                 <div className="absolute top-[3.5rem] left-1 flex gap-1">
+                     <div className="w-3 h-6 bg-blue-800 rounded-sm"></div> {/* Jeans Shorts */}
+                     <div className="w-3 h-6 bg-blue-800 rounded-sm"></div>
+                 </div>
+             )}
+        </div>
+    );
+};
+
 const Cargo = ({ type }: { type: TruckConfig['cargoType'] }) => {
     if (type === 'empty') return null;
 
@@ -148,16 +236,66 @@ const Cargo = ({ type }: { type: TruckConfig['cargoType'] }) => {
     );
 };
 
-const TruckCharacter: React.FC<TruckProps> = ({ config, isRunning = true, scoreEffect }) => {
+const ParticleSystem = ({ type }: { type: 'success' | 'fail' }) => {
+  const particles = useMemo(() => {
+    return Array.from({ length: 24 }).map((_, i) => {
+      // Random angle and distance
+      const angle = Math.random() * 360;
+      const distance = 120 + Math.random() * 100; // Explode outwards
+      const tx = Math.cos(angle * Math.PI / 180) * distance;
+      const ty = Math.sin(angle * Math.PI / 180) * distance;
+      
+      // Random colors based on type
+      const successColors = ['bg-yellow-300', 'bg-white', 'bg-blue-300', 'bg-green-300', 'bg-pink-400'];
+      const failColors = ['bg-gray-600', 'bg-red-600', 'bg-orange-600', 'bg-black', 'bg-slate-700'];
+      const colors = type === 'success' ? successColors : failColors;
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      
+      // Random shape/size
+      const size = 6 + Math.random() * 8;
+      const delay = Math.random() * 0.15;
+      
+      return { id: i, tx, ty, color, size, delay };
+    });
+  }, [type]);
+
+  return (
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0 h-0 z-[60] overflow-visible pointer-events-none">
+      {particles.map(p => (
+        <div
+          key={p.id}
+          className={`absolute rounded-full ${p.color} animate-particle shadow-sm`}
+          style={{
+            width: `${p.size}px`,
+            height: `${p.size}px`,
+            '--tx': `${p.tx}px`,
+            '--ty': `${p.ty}px`,
+            animationDelay: `${p.delay}s`
+          } as React.CSSProperties}
+        />
+      ))}
+    </div>
+  );
+};
+
+const TruckCharacter: React.FC<TruckProps> = ({ config, isRunning = true, scoreEffect, failPhrase }) => {
   const colors = TRUCK_COLORS[config.color];
+
+  // Determine Driver Mode
+  let driverMode: 'normal' | 'celebrate' | 'rage' = 'normal';
+  if (scoreEffect === 'success') driverMode = 'celebrate';
+  if (scoreEffect === 'fail') driverMode = 'rage';
 
   return (
     <div className={`
       relative w-36 h-48
       transition-transform duration-200
       ${scoreEffect === 'success' ? 'animate-jump-success' : ''}
-      ${scoreEffect === 'fail' ? 'scale-90 opacity-50 grayscale' : ''}
+      ${scoreEffect === 'fail' ? 'scale-90 opacity-100' : ''} 
     `}>
+      {/* Particle System for Impacts */}
+      {scoreEffect && <ParticleSystem type={scoreEffect} />}
+
       <div className={`relative w-full h-full ${isRunning ? 'animate-truck-run' : ''}`}>
         
         {/* --- SHADOWS & GLOWS --- */}
@@ -247,6 +385,12 @@ const TruckCharacter: React.FC<TruckProps> = ({ config, isRunning = true, scoreE
             rounded-t-3xl rounded-b-lg
             z-20 transform scale-x-110
         `}>
+            {/* The Driver (Sticking Head Out - Now with modes) */}
+            {/* Move driver container out slightly to prevent clipping on jump out */}
+            <div className="absolute inset-0 overflow-visible">
+                <Driver mode={driverMode} customPhrase={failPhrase} />
+            </div>
+
              {/* Main Roof Shape */}
              <div className={`
                 w-full h-full 
